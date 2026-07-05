@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Full Windows Hello for Business (WHfB) health audit across your tenant.
 .DESCRIPTION
@@ -9,7 +9,7 @@
       - PRT (Primary Refresh Token) health
       - Entra Join type (AzureAD / Hybrid / Registered)
       - Last sign-in recency
-      - Devices with NO WHfB method (password-only — security risk)
+      - Devices with NO WHfB method (password-only -- security risk)
       - Devices where WHfB is broken / incomplete
 
     Outputs a full HTML dashboard + CSV.
@@ -93,7 +93,7 @@ Write-EIQSuccess "CSV: $csvPath"
 
 # HTML
 $htmlPath = Get-EIQOutputPath -ReportName "WHFBHealth"
-$html = Get-EIQHTMLHeader -Title "Windows Hello for Business Health Report" -Subtitle "Authentication method audit — WHfB, FIDO2, MFA and password-only accounts"
+$html = Get-EIQHTMLHeader -Title "Windows Hello for Business Health Report" -Subtitle "Authentication method audit -- WHfB, FIDO2, MFA and password-only accounts"
 
 $html += @"
 <div class="stats">
@@ -118,7 +118,7 @@ foreach ($r in ($results | Sort-Object Status, DisplayName)) {
     $badge = switch ($r.Status) {
         "Protected"     { '<span class="badge badge-green">Protected</span>' }
         "MFA-Only"      { '<span class="badge badge-blue">MFA Only</span>' }
-        "Password Only" { '<span class="badge badge-red">⚠ Password Only</span>' }
+        "Password Only" { '<span class="badge badge-red">[!] Password Only</span>' }
     }
     $html += "<tr>"
     $html += "<td>$($r.DisplayName)</td><td class='mono'>$($r.UPN)</td><td>$badge</td>"
@@ -136,7 +136,7 @@ Write-EIQSuccess "HTML report: $htmlPath"
 
 Write-Host ""
 Write-Host "  WHfB Health Summary" -ForegroundColor Yellow
-Write-Host "  ────────────────────────────────" -ForegroundColor DarkGray
+Write-Host "  --------------------------------" -ForegroundColor DarkGray
 Write-Host "  Protected (WHfB/FIDO2) : " -NoNewline; Write-Host "$protected users ($pctProtected%)" -ForegroundColor Green
 Write-Host "  MFA Only (no WHfB)     : " -NoNewline; Write-Host "$mfaOnly users" -ForegroundColor Yellow
 Write-Host "  Password Only          : " -NoNewline; Write-Host "$pwdOnly users  ← ACTION NEEDED" -ForegroundColor Red

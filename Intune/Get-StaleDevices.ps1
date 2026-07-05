@@ -1,8 +1,8 @@
-<#
+﻿<#
 .SYNOPSIS
     Identify stale/orphaned devices in Intune cross-referenced with Entra ID sign-in activity.
 .DESCRIPTION
-    Goes further than Ali's version — cross-references:
+    Goes further than Ali's version -- cross-references:
       - Intune last sync date
       - Entra ID last sign-in (signInActivity)
       - Device ownership type (Corporate vs Personal)
@@ -73,7 +73,7 @@ $lowRisk    = @($stale | Where-Object { $_.Risk -eq "Low"    }).Count
 
 Write-Host ""
 Write-Host "  Stale Device Summary (>$DaysThreshold days)" -ForegroundColor Yellow
-Write-Host "  ────────────────────────────────────────────" -ForegroundColor DarkGray
+Write-Host "  --------------------------------------------" -ForegroundColor DarkGray
 Write-Host "  Total stale  : " -NoNewline; Write-Host "$($stale.Count) devices" -ForegroundColor White
 Write-Host "  High risk    : " -NoNewline; Write-Host "$highRisk devices  (>180 days)" -ForegroundColor Red
 Write-Host "  Medium risk  : " -NoNewline; Write-Host "$medRisk devices  (90-180 days)" -ForegroundColor Yellow

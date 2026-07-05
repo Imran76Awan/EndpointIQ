@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-    EndpointIQ — Intune, Entra ID & WHfB Admin Toolkit
+    EndpointIQ -- Intune, Entra ID & WHfB Admin Toolkit
 .DESCRIPTION
     By Imran Awan | EndpointWeekly.com | github.com/Imran76Awan/EndpointIQ
 
@@ -68,7 +68,7 @@ $running = $true
 while ($running) {
     Write-EIQBanner -Account $ctx.Account -Tenant $ctx.TenantId
 
-    Write-EIQSection "📊" "INTUNE — Device Management"
+    Write-EIQSection "📊" "INTUNE -- Device Management"
     Write-EIQItem "1"  "Get-DeviceHealthScore"    "Composite 0-100 health score for every device"         "UNIQUE"
     Write-EIQItem "2"  "Get-StaleDevices"          "Stale devices cross-referenced with Entra sign-in"     "AUTO-REMEDIATE"
     Write-EIQItem "3"  "Get-PolicyConflicts"       "Deep scan for CSP policy conflicts on a device"
@@ -77,7 +77,7 @@ while ($running) {
     Write-EIQItem "6"  "Get-RemediationStatus"     "Proactive remediation script results"
     Write-EIQItem "7"  "Invoke-BulkSync"           "Trigger MDM sync across a group of devices"
 
-    Write-EIQSection "🔐" "WHFB — Windows Hello for Business"
+    Write-EIQSection "🔐" "WHFB -- Windows Hello for Business"
     Write-EIQItem "8"  "Get-WHFBHealthReport"      "Full WHfB + FIDO2 adoption audit across all users"     "UNIQUE"
     Write-EIQItem "9"  "Invoke-PRTRemediation"     "Diagnose and auto-fix PRT issues on this device"       "UNIQUE"
     Write-EIQItem "10" "Get-WHFBEnrollmentStatus"  "Per-device WHfB enrollment and key status"
@@ -86,7 +86,7 @@ while ($running) {
     Write-EIQItem "11" "Get-AutopilotReport"       "Full Autopilot device inventory and profiles"
     Write-EIQItem "12" "Get-DevicePrepStatus"      "Autopilot Device Preparation (v2) status"
 
-    Write-EIQSection "🏢" "ENTRA ID — Identity"
+    Write-EIQSection "🏢" "ENTRA ID -- Identity"
     Write-EIQItem "13" "Get-SignInReport"           "Recent sign-ins, failures and risky sign-ins"
     Write-EIQItem "14" "Get-CAReport"               "Conditional Access policy audit"
     Write-EIQItem "15" "Get-RiskyUsers"             "Users flagged at risk in Identity Protection"
@@ -94,7 +94,7 @@ while ($running) {
     Write-EIQItem "17" "Get-GuestUserAudit"         "Guest accounts and their access levels"
 
     Write-EIQSection "📋" "REPORTS"
-    Write-EIQItem "18" "Export-TenantHealthReport" "Full tenant dashboard — share with your IT Manager"    "SIGNATURE"
+    Write-EIQItem "18" "Export-TenantHealthReport" "Full tenant dashboard -- share with your IT Manager"    "SIGNATURE"
     Write-EIQItem "19" "Export-DeviceInventory"    "Full 35-column device inventory CSV + HTML"
 
     Write-EIQSection "⚙" "SETTINGS"

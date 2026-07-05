@@ -1,13 +1,13 @@
-<#
+﻿<#
 .SYNOPSIS
     Calculates a composite Health Score (0-100) for every managed device.
 .DESCRIPTION
     Unique to EndpointIQ. Scores each device across 5 pillars:
-      - Compliance (25pts)    — is the device compliant?
-      - Defender (25pts)      — AV up to date, no active threats
-      - Patch level (20pts)   — last Windows update recency
-      - Check-in recency (20pts) — last Intune sync
-      - Encryption (10pts)    — BitLocker enabled
+      - Compliance (25pts)    -- is the device compliant?
+      - Defender (25pts)      -- AV up to date, no active threats
+      - Patch level (20pts)   -- last Windows update recency
+      - Check-in recency (20pts) -- last Intune sync
+      - Encryption (10pts)    -- BitLocker enabled
 
     Outputs an HTML report with colour-coded scores and a CSV for further analysis.
     Devices scoring below 60 are flagged as At Risk.
@@ -38,7 +38,7 @@ $results = foreach ($d in $devices) {
     $score = 0
     $breakdown = @{}
 
-    # Pillar 1 — Compliance (25pts)
+    # Pillar 1 -- Compliance (25pts)
     $compScore = switch ($d.complianceState) {
         "compliant"    { 25 }
         "unknown"      { 10 }
@@ -48,7 +48,7 @@ $results = foreach ($d in $devices) {
     $score += $compScore
     $breakdown.Compliance = $compScore
 
-    # Pillar 2 — Defender (25pts)
+    # Pillar 2 -- Defender (25pts)
     $wp = $d.windowsProtectionState
     $defScore = 0
     if ($wp) {
@@ -60,10 +60,10 @@ $results = foreach ($d in $devices) {
     $score += $defScore
     $breakdown.Defender = $defScore
 
-    # Pillar 3 — Patch recency (20pts)
+    # Pillar 3 -- Patch recency (20pts)
     $patchScore = 0
     if ($d.osVersion) {
-        # Extract build number heuristic — higher = more recent
+        # Extract build number heuristic -- higher = more recent
         $build = ($d.osVersion -split '\.')[2] -as [int]
         if ($build -ge 22631)     { $patchScore = 20 }  # Win11 23H2+
         elseif ($build -ge 22000) { $patchScore = 15 }  # Win11 21H2+
@@ -74,7 +74,7 @@ $results = foreach ($d in $devices) {
     $score += $patchScore
     $breakdown.Patch = $patchScore
 
-    # Pillar 4 — Check-in recency (20pts)
+    # Pillar 4 -- Check-in recency (20pts)
     $syncScore = 0
     if ($d.lastSyncDateTime) {
         $daysSince = ((Get-Date) - [datetime]$d.lastSyncDateTime).TotalDays
@@ -87,7 +87,7 @@ $results = foreach ($d in $devices) {
     $score += $syncScore
     $breakdown.CheckIn = $syncScore
 
-    # Pillar 5 — Encryption (10pts)
+    # Pillar 5 -- Encryption (10pts)
     $encScore = if ($d.encryptionState -eq "encrypted") { 10 } else { 0 }
     $score += $encScore
     $breakdown.Encryption = $encScore
@@ -170,7 +170,7 @@ Write-EIQSuccess "HTML report: $htmlPath"
 # Console summary
 Write-Host ""
 Write-Host "  Health Score Summary" -ForegroundColor Yellow
-Write-Host "  ────────────────────────────────" -ForegroundColor DarkGray
+Write-Host "  --------------------------------" -ForegroundColor DarkGray
 Write-Host "  Average Score : " -NoNewline; Write-Host "$avgScore / 100" -ForegroundColor Cyan
 Write-Host "  Healthy       : " -NoNewline; Write-Host "$healthy devices" -ForegroundColor Green
 Write-Host "  Fair          : " -NoNewline; Write-Host "$fair devices" -ForegroundColor Yellow

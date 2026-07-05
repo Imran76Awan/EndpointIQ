@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-    One-command full tenant health dashboard — the EndpointIQ signature report.
+    One-command full tenant health dashboard -- the EndpointIQ signature report.
 .DESCRIPTION
     Generates a single, comprehensive HTML dashboard covering:
       - Device summary (total, compliant, stale, OS breakdown)
@@ -19,7 +19,7 @@
 $moduleRoot = Join-Path $PSScriptRoot "..\Modules"
 Import-Module (Join-Path $moduleRoot "EIQ-Helpers.psm1") -Force
 
-Write-EIQInfo "Building Tenant Health Report — this will take a few minutes..."
+Write-EIQInfo "Building Tenant Health Report -- this will take a few minutes..."
 Write-EIQStep "Fetching devices..."
 
 $devices = Get-EIQAllPages -Uri "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?`$select=id,deviceName,userPrincipalName,complianceState,lastSyncDateTime,osVersion,operatingSystem,encryptionState,managedDeviceOwnerType"
@@ -54,7 +54,7 @@ $autopilot   = @(Get-EIQAllPages -Uri "https://graph.microsoft.com/v1.0/deviceMa
 Write-EIQStep "Building report..."
 
 $htmlPath = Get-EIQOutputPath -ReportName "TenantHealthReport"
-$html = Get-EIQHTMLHeader -Title "Tenant Health Dashboard" -Subtitle "Executive summary — devices, security, identity and compliance at a glance"
+$html = Get-EIQHTMLHeader -Title "Tenant Health Dashboard" -Subtitle "Executive summary -- devices, security, identity and compliance at a glance"
 
 $html += @"
 <div class="stats">
@@ -111,7 +111,7 @@ $html += @"
 </div>
 
 <div>
-<div class="section-title">⚠ Attention Required</div>
+<div class="section-title">[!] Attention Required</div>
 <table>
 <thead><tr><th>Item</th><th>Count</th><th>Action</th></tr></thead>
 <tbody>

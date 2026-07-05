@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Diagnose and auto-remediate PRT (Primary Refresh Token) issues on devices.
 .DESCRIPTION
@@ -43,7 +43,7 @@ function Get-DsregStatus {
 function Show-StatusLine {
     param([string]$Label, [string]$Value, [string]$GoodValue = "YES")
     $isGood = $Value -eq $GoodValue
-    $icon   = if ($isGood) { "✔" } else { "✖" }
+    $icon   = if ($isGood) { "[OK]" } else { "[X]" }
     $color  = if ($isGood) { "Green" } else { "Red" }
     Write-Host "  $icon " -ForegroundColor $color -NoNewline
     Write-Host "$Label : " -ForegroundColor Gray -NoNewline
@@ -51,10 +51,10 @@ function Show-StatusLine {
 }
 
 Write-Host ""
-Write-Host "  ─────────────────────────────────────────" -ForegroundColor DarkGray
-Write-Host "   EndpointIQ — PRT Remediation Tool" -ForegroundColor Cyan
+Write-Host "  -----------------------------------------" -ForegroundColor DarkGray
+Write-Host "   EndpointIQ -- PRT Remediation Tool" -ForegroundColor Cyan
 Write-Host "   by Imran Awan | EndpointWeekly.com" -ForegroundColor DarkGray
-Write-Host "  ─────────────────────────────────────────" -ForegroundColor DarkGray
+Write-Host "  -----------------------------------------" -ForegroundColor DarkGray
 Write-Host ""
 
 Write-EIQInfo "Running dsregcmd /status diagnostic..."
@@ -73,16 +73,16 @@ $entDevice       = $s['EnterprisePrtAuthority']
 $wamBroker       = $s['WamDefaultSet']
 $certPresent     = $s['KeySignTest']
 
-Write-Host "  ── Device Identity ──────────────────────" -ForegroundColor Yellow
+Write-Host "  -- Device Identity ----------------------" -ForegroundColor Yellow
 Show-StatusLine "Azure AD Joined    " $azureAdJoined
 Show-StatusLine "Domain Joined      " $domainJoined
 Show-StatusLine "Workplace Joined   " $workplaceJoined
 
 Write-Host ""
-Write-Host "  ── PRT Health ───────────────────────────" -ForegroundColor Yellow
+Write-Host "  -- PRT Health ---------------------------" -ForegroundColor Yellow
 Show-StatusLine "PRT Present        " $prtPresent
 if ($prtExpiry) {
-    Write-Host "  → PRT Expiry       : $prtExpiry" -ForegroundColor DarkGray
+    Write-Host "  -> PRT Expiry       : $prtExpiry" -ForegroundColor DarkGray
 }
 Show-StatusLine "WAM Default Set    " $wamBroker
 Show-StatusLine "Key Sign Test      " $certPresent "PASSED"
@@ -92,25 +92,25 @@ Write-Host ""
 # Identify issues
 $issues = @()
 if ($azureAdJoined -ne "YES" -and $workplaceJoined -ne "YES") { $issues += "Device is not Azure AD Joined or Registered" }
-if ($prtPresent -ne "YES")  { $issues += "PRT is missing — user cannot get SSO" }
-if ($wamBroker -ne "YES")   { $issues += "WAM token broker is not set — SSO token acquisition will fail" }
-if ($certPresent -ne "PASSED") { $issues += "Device certificate (KeySignTest) failed — WHfB and cert-based auth will not work" }
+if ($prtPresent -ne "YES")  { $issues += "PRT is missing -- user cannot get SSO" }
+if ($wamBroker -ne "YES")   { $issues += "WAM token broker is not set -- SSO token acquisition will fail" }
+if ($certPresent -ne "PASSED") { $issues += "Device certificate (KeySignTest) failed -- WHfB and cert-based auth will not work" }
 
 if ($issues.Count -eq 0) {
     Write-EIQSuccess "No PRT issues detected. Device identity is healthy."
     exit 0
 }
 
-Write-Host "  ── Issues Found ─────────────────────────" -ForegroundColor Red
+Write-Host "  -- Issues Found -------------------------" -ForegroundColor Red
 foreach ($i in $issues) { Write-EIQError $i }
 Write-Host ""
 
 if ($DiagOnly) {
-    Write-EIQWarn "DiagOnly mode — no changes made."
+    Write-EIQWarn "DiagOnly mode -- no changes made."
     exit 0
 }
 
-Write-Host "  ── Available Remediations ───────────────" -ForegroundColor Yellow
+Write-Host "  -- Available Remediations ---------------" -ForegroundColor Yellow
 Write-Host "    [1] Re-register device with Azure AD (dsregcmd /join)" -ForegroundColor White
 Write-Host "    [2] Clear WAM token state and force PRT refresh" -ForegroundColor White
 Write-Host "    [3] Force Intune MDM sync after fix" -ForegroundColor White
@@ -152,7 +152,7 @@ function Do-MDMSync {
         Invoke-CimMethod -Namespace "root\cimv2\mdm\dmmap" -ClassName "MDM_DMSessionActions" -MethodName "GenericAlert" -ErrorAction SilentlyContinue
         Write-EIQSuccess "MDM sync triggered."
     } catch {
-        # Fallback — restart IntuneManagementExtension service
+        # Fallback -- restart IntuneManagementExtension service
         Restart-Service -Name IntuneManagementExtension -ErrorAction SilentlyContinue
         Write-EIQSuccess "IntuneManagementExtension restarted."
     }

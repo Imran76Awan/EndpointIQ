@@ -1,4 +1,4 @@
-# EndpointIQ — Authentication & Multi-Tenant Management
+﻿# EndpointIQ -- Authentication & Multi-Tenant Management
 # Author: Imran Awan | EndpointWeekly.com
 
 $script:TenantsFile = Join-Path $PSScriptRoot "..\tenants.json"

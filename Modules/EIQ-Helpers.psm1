@@ -1,4 +1,4 @@
-# EndpointIQ — Shared Helpers
+﻿# EndpointIQ -- Shared Helpers
 # Author: Imran Awan | EndpointWeekly.com
 
 function Write-EIQBanner {
@@ -14,17 +14,17 @@ function Write-EIQBanner {
     Write-Host "  ╚══════╝╚═╝  ╚═══╝╚═════╝ ╚═╝      ╚═════╝ ╚═╝╚═╝  ╚═══╝   ╚═╝       ╚═╝ ╚══▀▀═╝ " -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  by Imran Awan  |  EndpointWeekly.com  |  github.com/Imran76Awan/EndpointIQ" -ForegroundColor DarkGray
-    Write-Host "  ─────────────────────────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host "  ---------------------------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  PowerShell $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray -NoNewline
     if ($connected) {
         Write-Host "  |  " -ForegroundColor DarkGray -NoNewline
-        Write-Host "● Connected: " -ForegroundColor Green -NoNewline
+        Write-Host "[*] Connected: " -ForegroundColor Green -NoNewline
         Write-Host "$Account" -ForegroundColor White -NoNewline
         if ($Tenant) { Write-Host "  ($Tenant)" -ForegroundColor DarkGray }
         else { Write-Host "" }
     } else {
         Write-Host "  |  " -ForegroundColor DarkGray -NoNewline
-        Write-Host "○ Not Connected" -ForegroundColor Red
+        Write-Host "[ ] Not Connected" -ForegroundColor Red
     }
     Write-Host ""
 }
@@ -33,7 +33,7 @@ function Write-EIQSection {
     param([string]$Icon, [string]$Title)
     Write-Host ""
     Write-Host "  $Icon  $Title" -ForegroundColor Yellow
-    Write-Host "  $('─' * 50)" -ForegroundColor DarkGray
+    Write-Host "  $('-' * 50)" -ForegroundColor DarkGray
 }
 
 function Write-EIQItem {
@@ -42,14 +42,14 @@ function Write-EIQItem {
     Write-Host "[$Key]" -ForegroundColor Green -NoNewline
     Write-Host " $Name" -ForegroundColor White -NoNewline
     if ($Tag) { Write-Host " [$Tag]" -ForegroundColor Magenta -NoNewline }
-    Write-Host " — $Desc" -ForegroundColor DarkGray
+    Write-Host " -- $Desc" -ForegroundColor DarkGray
 }
 
-function Write-EIQSuccess { param([string]$Msg) Write-Host "  ✔ $Msg" -ForegroundColor Green }
-function Write-EIQWarn    { param([string]$Msg) Write-Host "  ⚠ $Msg" -ForegroundColor Yellow }
-function Write-EIQError   { param([string]$Msg) Write-Host "  ✖ $Msg" -ForegroundColor Red }
-function Write-EIQInfo    { param([string]$Msg) Write-Host "  → $Msg" -ForegroundColor Cyan }
-function Write-EIQStep    { param([string]$Msg) Write-Host "  · $Msg" -ForegroundColor DarkGray }
+function Write-EIQSuccess { param([string]$Msg) Write-Host "  [OK] $Msg" -ForegroundColor Green }
+function Write-EIQWarn    { param([string]$Msg) Write-Host "  [!] $Msg" -ForegroundColor Yellow }
+function Write-EIQError   { param([string]$Msg) Write-Host "  [X] $Msg" -ForegroundColor Red }
+function Write-EIQInfo    { param([string]$Msg) Write-Host "  -> $Msg" -ForegroundColor Cyan }
+function Write-EIQStep    { param([string]$Msg) Write-Host "  . $Msg" -ForegroundColor DarkGray }
 
 function Get-EIQOutputPath {
     param([string]$ReportName)
@@ -77,7 +77,7 @@ function Get-EIQHTMLHeader {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>$Title — EndpointIQ</title>
+<title>$Title -- EndpointIQ</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
@@ -127,7 +127,7 @@ function Get-EIQHTMLHeader {
   </div>
   <div class="header-right">
     <div class="brand">ENDPOINTIQ</div>
-    <div class="meta">by Imran Awan · EndpointWeekly.com</div>
+    <div class="meta">by Imran Awan . EndpointWeekly.com</div>
     <div class="meta">Generated: $(Get-Date -Format 'dd MMM yyyy HH:mm')</div>
   </div>
 </div>
