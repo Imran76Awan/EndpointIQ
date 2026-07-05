@@ -3,6 +3,11 @@
 
 $script:TenantsFile = Join-Path $PSScriptRoot "..\tenants.json"
 
+# App registration credentials — certificate-based (no browser popup)
+$script:TenantId   = '2dfb2f0b-4d21-4268-9559-72926144c918'
+$script:ClientId   = '7f523eab-8b8b-492d-97dd-40fc4dc60465'
+$script:Thumbprint = 'EE834FD37142324FFBE4BA9280151453CB36E276'
+
 $script:RequiredScopes = @(
     'DeviceManagementConfiguration.Read.All',
     'DeviceManagementConfiguration.ReadWrite.All',
@@ -39,29 +44,36 @@ function Install-EIQDependencies {
 function Connect-EIQGraph {
     param([string]$TenantId = "")
     Install-EIQDependencies
-    $params = @{ Scopes = $script:RequiredScopes; NoWelcome = $true; ErrorAction = "Stop" }
-    if ($TenantId) { $params.TenantId = $TenantId }
     try {
-        Connect-MgGraph @params
+        # Certificate-based app authentication — no browser popup
+        Connect-MgGraph `
+            -TenantId   $script:TenantId `
+            -ClientId   $script:ClientId `
+            -CertificateThumbprint $script:Thumbprint `
+            -NoWelcome `
+            -ErrorAction Stop
         $ctx = Get-MgContext
-        Save-EIQTenant -Account $ctx.Account -TenantId $ctx.TenantId
+        Write-Host "  [OK] Connected as app: $($ctx.ClientId) | Tenant: $($ctx.TenantId)" -ForegroundColor Green
         return $ctx
     } catch {
-        Write-Host "  Authentication failed: $_" -ForegroundColor Red
+        Write-Host "  [X] Authentication failed: $_" -ForegroundColor Red
+        Write-Host "  Check that the certificate thumbprint is installed in CurrentUser\My store" -ForegroundColor Yellow
         return $null
     }
 }
 
 function Get-EIQContext {
     $ctx = Get-MgContext -ErrorAction SilentlyContinue
-    if (-not $ctx) { return $null }
-    try {
-        Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/v1.0/organization" -Method GET | Out-Null
-        return $ctx
-    } catch {
-        Disconnect-MgGraph -ErrorAction SilentlyContinue
-        return $null
+    if ($ctx) {
+        try {
+            Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/v1.0/organization" -Method GET | Out-Null
+            return $ctx
+        } catch {
+            Disconnect-MgGraph -ErrorAction SilentlyContinue
+        }
     }
+    # Auto-connect using app credentials if no active session
+    return Connect-EIQGraph
 }
 
 function Save-EIQTenant {
