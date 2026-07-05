@@ -85,6 +85,7 @@ while ($running) {
     Write-EIQSection "🚀" "AUTOPILOT"
     Write-EIQItem "11" "Get-AutopilotReport"       "Full Autopilot device inventory and profiles"
     Write-EIQItem "12" "Get-DevicePrepStatus"      "Autopilot Device Preparation (v2) status"
+    Write-EIQItem "20" "Get-AutopilotBuildDiagnostic" "Why did this build fail? Enter serial -> full timeline" "DIAGNOSTIC"
 
     Write-EIQSection "🏢" "ENTRA ID -- Identity"
     Write-EIQItem "13" "Get-SignInReport"           "Recent sign-ins, failures and risky sign-ins"
@@ -118,6 +119,7 @@ while ($running) {
         "10" { Run-Script "WHFB\Get-WHFBEnrollmentStatus.ps1" }
         "11" { Run-Script "Autopilot\Get-AutopilotReport.ps1" }
         "12" { Run-Script "Autopilot\Get-DevicePrepStatus.ps1" }
+        "20" { Run-Script "Autopilot\Get-AutopilotBuildDiagnostic.ps1" }
         "13" { Run-Script "Entra\Get-SignInReport.ps1" }
         "14" { Run-Script "Entra\Get-CAReport.ps1" }
         "15" { Run-Script "Entra\Get-RiskyUsers.ps1" }
