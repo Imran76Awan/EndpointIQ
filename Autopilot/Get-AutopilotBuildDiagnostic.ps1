@@ -116,14 +116,14 @@ function Safe-Get {
 
 # ── Data collection ───────────────────────────────────────────────────────────
 Write-EIQStep "Checking Autopilot device inventory..."
-$apUri     = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$SerialNumber')&`$select=id,serialNumber,manufacturer,model,groupTag,managedDeviceName,azureAdDeviceId,deploymentProfileAssignmentStatus,deploymentProfileAssignmentDetailedStatus,deploymentProfileAssignedDateTime,profileErrorCode,profileErrorMessage,deploymentProfileDisplayName"
+$apUri     = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$SerialNumber')"
 $apResult  = Safe-Get $apUri "Autopilot inventory"
 $apDevice  = $null
 if ($apResult -and $apResult.value)            { $apDevice = $apResult.value[0] }
 elseif ($apResult -and $apResult.serialNumber) { $apDevice = $apResult }
 
 Write-EIQStep "Checking Intune managed device record..."
-$mdUri         = "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?`$filter=serialNumber eq '$SerialNumber'&`$select=id,deviceName,userPrincipalName,enrolledDateTime,lastSyncDateTime,complianceState,managementState,operatingSystem,osVersion,azureADDeviceId,enrollmentType,managedDeviceOwnerType"
+$mdUri         = "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?`$filter=serialNumber eq '$SerialNumber'"
 $mdResult      = Safe-Get $mdUri "Managed devices"
 $managedDevice = $null
 if ($mdResult -and $mdResult.value)  { $managedDevice = $mdResult.value[0] }
