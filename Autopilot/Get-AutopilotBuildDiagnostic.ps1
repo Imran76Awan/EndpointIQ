@@ -4,8 +4,9 @@
 .DESCRIPTION
     Enter a device serial number. The script pulls everything Graph has:
 
+      Quick Diagnosis -- one-line root cause before any phases
       Phase 1 -- Autopilot inventory check (is the device registered?)
-      Phase 2 -- Deployment profiles in the tenant
+      Phase 2 -- Deployment profiles in the tenant (with group assignments)
       Phase 3 -- Enrollment restrictions (could a policy block this device?)
       Phase 4 -- Enrollment status (is it enrolled, when, who)
       Phase 5 -- Autopilot deployment event timeline (if a build was attempted)
@@ -115,13 +116,15 @@ function Safe-Get {
 
 # ── Data collection ───────────────────────────────────────────────────────────
 Write-EIQStep "Checking Autopilot device inventory..."
-$apResult  = Safe-Get "https://graph.microsoft.com/v1.0/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$SerialNumber')" "Autopilot inventory"
+$apUri     = "https://graph.microsoft.com/v1.0/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$SerialNumber')&`$select=id,serialNumber,manufacturer,model,groupTag,managedDeviceName,azureAdDeviceId,deploymentProfileAssignmentStatus,deploymentProfileAssignmentDetailedStatus,deploymentProfileAssignedDateTime,profileErrorCode,profileErrorMessage,deploymentProfileDisplayName"
+$apResult  = Safe-Get $apUri "Autopilot inventory"
 $apDevice  = $null
-if ($apResult -and $apResult.value)          { $apDevice = $apResult.value[0] }
+if ($apResult -and $apResult.value)            { $apDevice = $apResult.value[0] }
 elseif ($apResult -and $apResult.serialNumber) { $apDevice = $apResult }
 
 Write-EIQStep "Checking Intune managed device record..."
-$mdResult      = Safe-Get "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?`$filter=contains(serialNumber,'$SerialNumber')&`$select=id,deviceName,userPrincipalName,enrolledDateTime,lastSyncDateTime,complianceState,managementState,operatingSystem,osVersion,azureADDeviceId,enrollmentType,managedDeviceOwnerType,deviceEnrollmentType" "Managed devices"
+$mdUri         = "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?`$filter=serialNumber eq '$SerialNumber'&`$select=id,deviceName,userPrincipalName,enrolledDateTime,lastSyncDateTime,complianceState,managementState,operatingSystem,osVersion,azureADDeviceId,enrollmentType,managedDeviceOwnerType,deviceEnrollmentType"
+$mdResult      = Safe-Get $mdUri "Managed devices"
 $managedDevice = $null
 if ($mdResult -and $mdResult.value)  { $managedDevice = $mdResult.value[0] }
 elseif ($mdResult -and $mdResult.id) { $managedDevice = $mdResult }
@@ -132,9 +135,43 @@ $event    = $null
 if ($evResult -and $evResult.value) { $event = $evResult.value[0] }
 
 Write-EIQStep "Fetching deployment profiles..."
-$profilesResult = Safe-Get "https://graph.microsoft.com/v1.0/deviceManagement/windowsAutopilotDeploymentProfiles" "Deployment profiles"
+$profilesResult = Safe-Get "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeploymentProfiles?`$select=id,displayName,description,deviceType,outOfBoxExperienceSettings" "Deployment profiles"
 $profiles = @()
 if ($profilesResult -and $profilesResult.value) { $profiles = $profilesResult.value }
+
+# Fetch assignments for each profile
+$profileAssignments = @{}
+foreach ($p in $profiles) {
+    $pid = $p.id
+    $asgUri = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeploymentProfiles/$pid/assignments"
+    $asgResult = Safe-Get $asgUri "Profile assignments ($($p.displayName))"
+    $assignedGroups = @()
+    if ($asgResult -and $asgResult.value) {
+        foreach ($asg in $asgResult.value) {
+            $targetType = ""
+            if ($asg.target) {
+                $targetType = $asg.target.'@odata.type'
+            }
+            $groupId = ""
+            if ($asg.target -and $asg.target.groupId) {
+                $groupId = $asg.target.groupId
+            }
+            if ($groupId) {
+                $grpInfo = Safe-Get "https://graph.microsoft.com/v1.0/groups/$groupId`?`$select=id,displayName" "Group lookup"
+                if ($grpInfo -and $grpInfo.displayName) {
+                    $assignedGroups += $grpInfo.displayName
+                } else {
+                    $assignedGroups += $groupId
+                }
+            } elseif ($targetType -like "*allDevices*") {
+                $assignedGroups += "All Devices"
+            } elseif ($targetType -like "*allLicensed*") {
+                $assignedGroups += "All Users"
+            }
+        }
+    }
+    $profileAssignments[$pid] = $assignedGroups
+}
 
 Write-EIQStep "Fetching enrollment restrictions..."
 $restrictResult = Safe-Get "https://graph.microsoft.com/v1.0/deviceManagement/deviceEnrollmentConfigurations" "Enrollment restrictions"
@@ -156,10 +193,115 @@ Write-EIQStep "Fetching audit log..."
 $auditR = Safe-Get "https://graph.microsoft.com/v1.0/deviceManagement/auditEvents?`$filter=contains(displayName,'$SerialNumber')&`$top=10&`$orderby=activityDateTime desc" "Audit log"
 if ($auditR -and $auditR.value) { $auditEvents = $auditR.value }
 if ($auditEvents.Count -eq 0 -and $managedDevice -and $managedDevice.deviceName) {
-    $dn     = $managedDevice.deviceName
+    $dn      = $managedDevice.deviceName
     $auditR2 = Safe-Get "https://graph.microsoft.com/v1.0/deviceManagement/auditEvents?`$filter=contains(displayName,'$dn')&`$top=10&`$orderby=activityDateTime desc" "Audit log (by name)"
     if ($auditR2 -and $auditR2.value) { $auditEvents = $auditR2.value }
 }
+
+# ── AAD Dynamic Group lookup for Group Tag ─────────────────────────────────────
+$matchingGroups = @()
+$groupTag = ""
+if ($apDevice) {
+    $groupTag = Coalesce @($apDevice.groupTag, "")
+}
+if ($groupTag -ne "") {
+    Write-EIQStep "Searching AAD dynamic groups for Group Tag '$groupTag'..."
+    $dynGrpUri    = "https://graph.microsoft.com/v1.0/groups?`$filter=groupTypes/any(c:c eq 'DynamicMembership')&`$select=id,displayName,membershipRule,membershipRuleProcessingState"
+    $dynGrpResult = Safe-Get $dynGrpUri "Dynamic AAD groups"
+    if ($dynGrpResult -and $dynGrpResult.value) {
+        foreach ($g in $dynGrpResult.value) {
+            if ($g.membershipRule -like "*$groupTag*") {
+                $matchingGroups += $g
+            }
+        }
+    }
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  QUICK DIAGNOSIS (before Phase 1)
+# ═══════════════════════════════════════════════════════════════════════════════
+Write-Host ""
+Write-Host "  =====================================================" -ForegroundColor DarkGray
+Write-Host "   QUICK DIAGNOSIS" -ForegroundColor Cyan
+Write-Host "  =====================================================" -ForegroundColor DarkGray
+Write-Host ""
+
+$qdInInventory = if ($apDevice) { "YES" } else { "NO" }
+$qdGroupTag    = if ($groupTag -ne "") { $groupTag } else { "(none)" }
+
+$qdProfileAssigned = "NO"
+$qdProfileName     = ""
+if ($apDevice) {
+    $qdProfStatus = Coalesce @($apDevice.deploymentProfileAssignmentStatus, "unknown")
+    if ($qdProfStatus -eq "assigned") {
+        $qdProfileAssigned = "YES"
+        $qdProfileName     = Coalesce @($apDevice.deploymentProfileDisplayName, "")
+    }
+}
+
+$qdProfileStr = $qdProfileAssigned
+if ($qdProfileAssigned -eq "YES" -and $qdProfileName -ne "") {
+    $qdProfileStr = "YES ($qdProfileName)"
+}
+
+$qdErrorStr = ""
+if ($apDevice -and $apDevice.profileErrorCode -and $apDevice.profileErrorCode -ne 0) {
+    $qdErrMsg   = Coalesce @($apDevice.profileErrorMessage, "No message")
+    $qdErrorStr = "0x{0:X8} -- $qdErrMsg" -f $apDevice.profileErrorCode
+}
+
+$qdEnrolled = if ($managedDevice) { "YES" } else { "NO" }
+
+$qdGroupFoundStr = "NOT FOUND"
+$qdGroupFoundName = ""
+if ($matchingGroups.Count -gt 0) {
+    $qdGroupFoundName = $matchingGroups[0].displayName
+    $qdGroupFoundStr  = "FOUND ($qdGroupFoundName)"
+}
+
+# LIKELY CAUSE logic
+$qdLikelyCause = ""
+if (-not $apDevice) {
+    $qdLikelyCause = "Device not in Autopilot inventory -- hardware hash not uploaded, serial typo, or wrong tenant."
+} elseif ($qdProfileAssigned -eq "NO" -and $matchingGroups.Count -eq 0) {
+    $qdGtDisplay = if ($groupTag -ne "") { $groupTag } else { "(empty)" }
+    $qdLikelyCause = "No dynamic AAD group found with membershipRule matching group tag '$qdGtDisplay'. Create group with rule: (device.devicePhysicalIds -any _ -eq ""[OrderID]:$qdGtDisplay"") and assign a profile."
+} elseif ($qdProfileAssigned -eq "NO" -and $matchingGroups.Count -gt 0) {
+    $qdLikelyCause = "Dynamic group '$qdGroupFoundName' exists for tag '$groupTag' but no Autopilot profile is assigned to that group."
+} elseif ($qdProfileAssigned -eq "YES" -and -not $managedDevice) {
+    $qdLikelyCause = "Profile is assigned. Boot the device on internet to start provisioning."
+} elseif ($managedDevice -and $event -and $event.deploymentState -eq "failure") {
+    $qdLikelyCause = "Build attempted -- see Phase 5 for failure details."
+} elseif ($managedDevice) {
+    $qdLikelyCause = "Device successfully provisioned."
+} else {
+    $qdLikelyCause = "Unable to determine -- review phases below."
+}
+
+Write-Host ("  " + "In Autopilot inventory".PadRight(32) + ": ") -NoNewline
+if ($qdInInventory -eq "YES") { Write-Host $qdInInventory -ForegroundColor Green } else { Write-Host $qdInInventory -ForegroundColor Red }
+
+Write-Host ("  " + "Group Tag".PadRight(32) + ": ") -NoNewline
+Write-Host $qdGroupTag -ForegroundColor Cyan
+
+Write-Host ("  " + "Profile assigned".PadRight(32) + ": ") -NoNewline
+if ($qdProfileAssigned -eq "YES") { Write-Host $qdProfileStr -ForegroundColor Green } else { Write-Host $qdProfileStr -ForegroundColor Red }
+
+if ($qdErrorStr -ne "") {
+    Write-Host ("  " + "Profile error".PadRight(32) + ": ") -NoNewline
+    Write-Host $qdErrorStr -ForegroundColor Red
+}
+
+Write-Host ("  " + "Enrolled in Intune".PadRight(32) + ": ") -NoNewline
+if ($qdEnrolled -eq "YES") { Write-Host $qdEnrolled -ForegroundColor Green } else { Write-Host $qdEnrolled -ForegroundColor Yellow }
+
+Write-Host ("  " + "Dynamic AAD group for tag".PadRight(32) + ": ") -NoNewline
+if ($matchingGroups.Count -gt 0) { Write-Host $qdGroupFoundStr -ForegroundColor Green } else { Write-Host $qdGroupFoundStr -ForegroundColor Red }
+
+Write-Host ""
+Write-Host "  LIKELY CAUSE:" -ForegroundColor Yellow
+Write-Host "  $qdLikelyCause" -ForegroundColor White
+Write-Host ""
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  OUTPUT
@@ -170,7 +312,7 @@ Write-Section "PHASE 1 -- DEVICE IDENTITY"
 if ($apDevice) {
     $devName    = Coalesce @($managedDevice.deviceName, $apDevice.managedDeviceName, "Not yet enrolled")
     $aadId      = Coalesce @($apDevice.azureAdDeviceId, $managedDevice.azureADDeviceId, "n/a")
-    $groupTag   = Coalesce @($apDevice.groupTag, "(none)")
+    $groupTagD  = Coalesce @($apDevice.groupTag, "(none)")
     $profStatus = Coalesce @($apDevice.deploymentProfileAssignmentStatus, "unknown")
     $model      = "$($apDevice.manufacturer) $($apDevice.model)"
 
@@ -179,15 +321,28 @@ if ($apDevice) {
     Write-Row "Device Name"    $devName  "White"
     Write-Row "Autopilot ID"   $apDevice.id "DarkGray"
     Write-Row "AAD Device ID"  $aadId    "DarkGray"
-    Write-Row "Group Tag"      $groupTag "White"
+    Write-Row "Group Tag"      $groupTagD "White"
 
-    Write-Host ("  Profile Status  : ") -NoNewline
+    Write-Host ("  Profile Status    : ") -NoNewline
     if ($profStatus -eq "assigned") {
         Write-Host $profStatus -ForegroundColor Green
     } elseif ($profStatus -like "*notAssigned*" -or $profStatus -eq "unknown") {
         Write-Host "$profStatus  <-- NO PROFILE ASSIGNED -- BUILD WILL NOT AUTO-START" -ForegroundColor Red
     } else {
         Write-Host $profStatus -ForegroundColor Yellow
+    }
+
+    if ($apDevice.deploymentProfileAssignmentDetailedStatus -and $apDevice.deploymentProfileAssignmentDetailedStatus -ne 'none') {
+        $detailStatus = $apDevice.deploymentProfileAssignmentDetailedStatus
+        Write-Row "Profile Detail" $detailStatus "Yellow"
+    }
+    if ($apDevice.profileErrorCode -and $apDevice.profileErrorCode -ne 0) {
+        $errMsg = Coalesce @($apDevice.profileErrorMessage, "No message")
+        $errStr = "0x{0:X8} -- $errMsg" -f $apDevice.profileErrorCode
+        Write-Row "Profile Error" $errStr "Red"
+    }
+    if ($apDevice.deploymentProfileAssignedDateTime -and $apDevice.deploymentProfileAssignedDateTime -ne '') {
+        Write-Row "Profile Assigned" (Format-DT $apDevice.deploymentProfileAssignedDateTime) "White"
     }
 
     if ($apDevice.deploymentProfileDisplayName) {
@@ -206,14 +361,57 @@ if ($apDevice) {
 # Phase 2 ─────────────────────────────────────────────────────────────────────
 Write-Section "PHASE 2 -- DEPLOYMENT PROFILES (all in tenant)"
 if ($profiles.Count -gt 0) {
-    Write-Host ("  " + "Profile Name".PadRight(44) + "Mode".PadRight(24) + "Join Type") -ForegroundColor DarkGray
-    Write-Host ("  " + "-" * 76) -ForegroundColor DarkGray
+    Write-Host ("  " + "Profile Name".PadRight(36) + "Mode".PadRight(18) + "Join Type".PadRight(18) + "Assigned Groups") -ForegroundColor DarkGray
+    Write-Host ("  " + "-" * 88) -ForegroundColor DarkGray
     foreach ($p in $profiles) {
         $mode     = Coalesce @($p.outOfBoxExperienceSettings.userType, "standard")
         $joinType = if ($p.'@odata.type' -like "*hybrid*") { "Hybrid AAD Join" } else { "AAD Join" }
         $pname    = Coalesce @($p.displayName, "Unnamed")
-        $trunc    = if ($pname.Length -gt 42) { $pname.Substring(0,39) + "..." } else { $pname }
-        Write-Host ("  " + $trunc.PadRight(44) + $mode.PadRight(24) + $joinType) -ForegroundColor White
+        $trunc    = if ($pname.Length -gt 34) { $pname.Substring(0,31) + "..." } else { $pname }
+
+        $asgList  = $profileAssignments[$p.id]
+        if ($asgList -and $asgList.Count -gt 0) {
+            $asgStr = $asgList -join ", "
+        } else {
+            $asgStr = "(no groups)"
+        }
+
+        Write-Host ("  " + $trunc.PadRight(36) + $mode.PadRight(18) + $joinType.PadRight(18)) -NoNewline
+        if ($asgStr -eq "(no groups)") {
+            Write-Host $asgStr -ForegroundColor Red
+        } else {
+            Write-Host $asgStr -ForegroundColor White
+        }
+    }
+
+    # Check if any profile is assigned to a group matching the device's group tag
+    Write-Host ""
+    if ($groupTag -ne "") {
+        $matchedProfile = $false
+        foreach ($p in $profiles) {
+            $asgList = $profileAssignments[$p.id]
+            if ($asgList -and $asgList.Count -gt 0) {
+                foreach ($grpName in $asgList) {
+                    foreach ($mg in $matchingGroups) {
+                        if ($grpName -eq $mg.displayName) {
+                            $matchedProfile = $true
+                            $matchedProfileName = $p.displayName
+                            $matchedGroupName   = $grpName
+                        }
+                    }
+                }
+            }
+        }
+        if ($matchedProfile) {
+            Write-Host "  [OK] Profile '$matchedProfileName' is assigned to group '$matchedGroupName' which matches Group Tag '$groupTag'." -ForegroundColor Green
+        } else {
+            $profileNames = ($profiles | ForEach-Object { Coalesce @($_.displayName, "Unnamed") }) -join ", "
+            Write-Host "  [X] WARNING: None of the profiles' assigned groups match Group Tag '$groupTag'." -ForegroundColor Red
+            Write-Host "      Profiles in tenant: $profileNames" -ForegroundColor Yellow
+            Write-Host "      Ensure a profile is assigned to the dynamic group for this group tag." -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  [!] No Group Tag on this device -- profile must be assigned to All Devices or a static group." -ForegroundColor Yellow
     }
 } else {
     Write-Host "  [!] No deployment profiles found in this tenant." -ForegroundColor Red
@@ -360,7 +558,10 @@ if ($espApps.Count -gt 0) {
 
     foreach ($app in ($failedApps | Sort-Object state)) {
         $sc = "Gray"
-        switch ($app.state) { "failed" { $sc = "Red" }; "notInstalled" { $sc = "Yellow" } }
+        switch ($app.state) {
+            "failed"       { $sc = "Red"    }
+            "notInstalled" { $sc = "Yellow" }
+        }
         $nm = Coalesce @($app.displayName, $app.settingName, "Unknown")
         $nm = if ($nm.Length -gt 44) { $nm.Substring(0,41) + "..." } else { $nm }
         $ec = if ($app.errorCode -and $app.errorCode -ne 0) { "0x{0:X8}" -f $app.errorCode } else { "" }
@@ -383,7 +584,11 @@ if ($espPolicies.Count -gt 0) {
 
     foreach ($pol in ($failPol | Sort-Object state)) {
         $sc = "Gray"
-        switch ($pol.state) { "error" { $sc = "Red" }; "conflict" { $sc = "Red" }; "nonCompliant" { $sc = "Yellow" } }
+        switch ($pol.state) {
+            "error"       { $sc = "Red"    }
+            "conflict"    { $sc = "Red"    }
+            "nonCompliant"{ $sc = "Yellow" }
+        }
         $nm = Coalesce @($pol.displayName, "Unknown Policy")
         $nm = if ($nm.Length -gt 44) { $nm.Substring(0,41) + "..." } else { $nm }
         $ec = if ($pol.errorCode -and $pol.errorCode -ne 0) { "0x{0:X8}" -f $pol.errorCode } else { "" }
@@ -406,8 +611,8 @@ if ($auditEvents.Count -gt 0) {
         $act = if ($ae.activityDisplayName.Length -gt 32) { $ae.activityDisplayName.Substring(0,29) + "..." } else { $ae.activityDisplayName }
         $res = Coalesce @($ae.activityResult, "unknown")
         $rc  = "Yellow"
-        if ($res -eq "success")        { $rc = "Green" }
-        if ($res -like "*fail*")       { $rc = "Red"   }
+        if ($res -eq "success")  { $rc = "Green" }
+        if ($res -like "*fail*") { $rc = "Red"   }
         Write-Host ("  " + $dt.PadRight(24) + $act.PadRight(34)) -NoNewline
         Write-Host $res -ForegroundColor $rc
     }
@@ -597,8 +802,17 @@ if ($ExportHTML) {
 
     $overallState = "Not enrolled"
     $overallColor = "badge-red"
-    if ($event)            { $overallState = $event.deploymentState; $overallColor = if ($event.deploymentState -eq "success") { "badge-green" } else { "badge-red" } }
-    elseif ($managedDevice){ $overallState = "Enrolled (no event)"; $overallColor = "badge-blue" }
+    if ($event) {
+        $overallState = $event.deploymentState
+        if ($event.deploymentState -eq "success") {
+            $overallColor = "badge-green"
+        } else {
+            $overallColor = "badge-red"
+        }
+    } elseif ($managedDevice) {
+        $overallState = "Enrolled (no event)"
+        $overallColor = "badge-blue"
+    }
 
     $apStatus = if ($apDevice) { Coalesce @($apDevice.deploymentProfileAssignmentStatus, "unknown") } else { "Not in inventory" }
 
@@ -621,7 +835,9 @@ if ($ExportHTML) {
         $devSS2     = Coalesce @($event.deviceSetupStatus,        "unknown")
         $accSS2     = Coalesce @($event.accountSetupStatus,       "unknown")
         $failD2     = Coalesce @($event.enrollmentFailureDetails, "")
-        $depBadge   = if ($event.deploymentState -eq "success") { "badge-green" } elseif ($event.deploymentState -eq "failure") { "badge-red" } else { "badge-blue" }
+        $depBadge   = "badge-blue"
+        if ($event.deploymentState -eq "success") { $depBadge = "badge-green" }
+        if ($event.deploymentState -eq "failure")  { $depBadge = "badge-red"   }
 
         $html += @"
 <div class="section-title">Deployment Timeline</div>
@@ -650,7 +866,9 @@ if ($ExportHTML) {
     if ($espApps.Count -gt 0) {
         $html += "<div class='section-title'>App Install Status</div><table><thead><tr><th>App</th><th>State</th><th>Error</th></tr></thead><tbody>"
         foreach ($app in ($espApps | Sort-Object state)) {
-            $badge = if ($app.state -eq "installed") { "badge-green" } elseif ($app.state -eq "failed") { "badge-red" } else { "badge-blue" }
+            $badge = "badge-blue"
+            if ($app.state -eq "installed") { $badge = "badge-green" }
+            if ($app.state -eq "failed")    { $badge = "badge-red"   }
             $dn    = Coalesce @($app.displayName, $app.settingName)
             $ec    = if ($app.errorCode -and $app.errorCode -ne 0) { "0x{0:X8}" -f $app.errorCode } else { "" }
             $html += "<tr><td>$dn</td><td><span class='badge $badge'>$($app.state)</span></td><td class='mono'>$ec</td></tr>"
