@@ -116,14 +116,14 @@ function Safe-Get {
 
 # ── Data collection ───────────────────────────────────────────────────────────
 Write-EIQStep "Checking Autopilot device inventory..."
-$apUri     = "https://graph.microsoft.com/v1.0/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$SerialNumber')&`$select=id,serialNumber,manufacturer,model,groupTag,managedDeviceName,azureAdDeviceId,deploymentProfileAssignmentStatus,deploymentProfileAssignmentDetailedStatus,deploymentProfileAssignedDateTime,profileErrorCode,profileErrorMessage,deploymentProfileDisplayName"
+$apUri     = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$SerialNumber')&`$select=id,serialNumber,manufacturer,model,groupTag,managedDeviceName,azureAdDeviceId,deploymentProfileAssignmentStatus,deploymentProfileAssignmentDetailedStatus,deploymentProfileAssignedDateTime,profileErrorCode,profileErrorMessage,deploymentProfileDisplayName"
 $apResult  = Safe-Get $apUri "Autopilot inventory"
 $apDevice  = $null
 if ($apResult -and $apResult.value)            { $apDevice = $apResult.value[0] }
 elseif ($apResult -and $apResult.serialNumber) { $apDevice = $apResult }
 
 Write-EIQStep "Checking Intune managed device record..."
-$mdUri         = "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?`$filter=serialNumber eq '$SerialNumber'&`$select=id,deviceName,userPrincipalName,enrolledDateTime,lastSyncDateTime,complianceState,managementState,operatingSystem,osVersion,azureADDeviceId,enrollmentType,managedDeviceOwnerType,deviceEnrollmentType"
+$mdUri         = "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?`$filter=serialNumber eq '$SerialNumber'&`$select=id,deviceName,userPrincipalName,enrolledDateTime,lastSyncDateTime,complianceState,managementState,operatingSystem,osVersion,azureADDeviceId,enrollmentType,managedDeviceOwnerType"
 $mdResult      = Safe-Get $mdUri "Managed devices"
 $managedDevice = $null
 if ($mdResult -and $mdResult.value)  { $managedDevice = $mdResult.value[0] }
@@ -142,8 +142,8 @@ if ($profilesResult -and $profilesResult.value) { $profiles = $profilesResult.va
 # Fetch assignments for each profile
 $profileAssignments = @{}
 foreach ($p in $profiles) {
-    $pid = $p.id
-    $asgUri = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeploymentProfiles/$pid/assignments"
+    $profId = $p.id
+    $asgUri = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeploymentProfiles/$profId/assignments"
     $asgResult = Safe-Get $asgUri "Profile assignments ($($p.displayName))"
     $assignedGroups = @()
     if ($asgResult -and $asgResult.value) {
@@ -170,7 +170,7 @@ foreach ($p in $profiles) {
             }
         }
     }
-    $profileAssignments[$pid] = $assignedGroups
+    $profileAssignments[$profId] = $assignedGroups
 }
 
 Write-EIQStep "Fetching enrollment restrictions..."
