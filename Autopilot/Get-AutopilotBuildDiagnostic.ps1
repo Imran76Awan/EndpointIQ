@@ -167,9 +167,9 @@ Write-Host "  =====================================================" -Foreground
 if ($apDevice) {
     Write-Host "  Serial Number   : " -NoNewline; Write-Host $apDevice.serialNumber -ForegroundColor Cyan
     Write-Host "  Model           : " -NoNewline; Write-Host "$($apDevice.manufacturer) $($apDevice.model)" -ForegroundColor White
-    Write-Host "  Managed Name    : " -NoNewline; Write-Host ($managedDevice.deviceName ?? $apDevice.managedDeviceName ?? "Not yet enrolled") -ForegroundColor White
+    Write-Host "  Managed Name    : " -NoNewline; Write-Host (if ($managedDevice.deviceName) { $managedDevice.deviceName } elseif ($apDevice.managedDeviceName) { $apDevice.managedDeviceName } else { "Not yet enrolled" }) -ForegroundColor White
     Write-Host "  Autopilot ID    : " -NoNewline; Write-Host $apDevice.id -ForegroundColor DarkGray
-    Write-Host "  AAD Device ID   : " -NoNewline; Write-Host ($apDevice.azureAdDeviceId ?? $managedDevice.azureADDeviceId ?? "n/a") -ForegroundColor DarkGray
+    Write-Host "  AAD Device ID   : " -NoNewline; Write-Host (if ($apDevice.azureAdDeviceId) { $apDevice.azureAdDeviceId } elseif ($managedDevice.azureADDeviceId) { $managedDevice.azureADDeviceId } else { "n/a" }) -ForegroundColor DarkGray
     Write-Host "  Profile         : " -NoNewline
     if ($apDevice.deploymentProfileAssignmentStatus -eq "assigned") {
         Write-Host $apDevice.displayName -ForegroundColor Green
@@ -199,7 +199,7 @@ if ($managedDevice) {
     Write-Host "  Last Sync       : " -NoNewline; Write-Host (Format-DateTime $managedDevice.lastSyncDateTime) -ForegroundColor White
     Write-Host "  Enroll Type     : " -NoNewline; Write-Host $managedDevice.enrollmentType -ForegroundColor White
     Write-Host "  OS Version      : " -NoNewline; Write-Host "$($managedDevice.operatingSystem) $($managedDevice.osVersion)" -ForegroundColor White
-    Write-Host "  Assigned User   : " -NoNewline; Write-Host ($managedDevice.userPrincipalName ?? "None (device-only)") -ForegroundColor White
+    Write-Host "  Assigned User   : " -NoNewline; Write-Host (if ($managedDevice.userPrincipalName) { $managedDevice.userPrincipalName } else { "None (device-only)" }) -ForegroundColor White
     Write-Host "  Compliance      : " -NoNewline
     $compColor = if ($managedDevice.complianceState -eq "compliant") { "Green" } elseif ($managedDevice.complianceState -eq "noncompliant") { "Red" } else { "Yellow" }
     Write-Host $managedDevice.complianceState -ForegroundColor $compColor
@@ -223,9 +223,9 @@ if ($event) {
     Write-Host "  Deployment start: " -NoNewline; Write-Host (Format-DateTime $event.deploymentStartDateTime) -ForegroundColor White
     Write-Host "  Deployment end  : " -NoNewline; Write-Host (Format-DateTime $event.deploymentEndDateTime) -ForegroundColor White
     Write-Host "  Total duration  : " -NoNewline; Write-Host (Format-Duration $event.deploymentTotalDuration) -ForegroundColor $(if ($event.deploymentState -eq "success") {"Green"} else {"Yellow"})
-    Write-Host "  Profile used    : " -NoNewline; Write-Host ($event.windowsAutopilotDeploymentProfileDisplayName ?? "n/a") -ForegroundColor White
-    Write-Host "  ESP Config      : " -NoNewline; Write-Host ($event.windows10EnrollmentCompletionPageConfigurationDisplayName ?? "None / not tracked") -ForegroundColor White
-    Write-Host "  Enrolled user   : " -NoNewline; Write-Host ($event.userPrincipalName ?? "None (Self-Deploy / Pre-Prov)") -ForegroundColor White
+    Write-Host "  Profile used    : " -NoNewline; Write-Host (if ($event.windowsAutopilotDeploymentProfileDisplayName) { $event.windowsAutopilotDeploymentProfileDisplayName } else { "n/a" }) -ForegroundColor White
+    Write-Host "  ESP Config      : " -NoNewline; Write-Host (if ($event.windows10EnrollmentCompletionPageConfigurationDisplayName) { $event.windows10EnrollmentCompletionPageConfigurationDisplayName } else { "None / not tracked" }) -ForegroundColor White
+    Write-Host "  Enrolled user   : " -NoNewline; Write-Host (if ($event.userPrincipalName) { $event.userPrincipalName } else { "None (Self-Deploy / Pre-Prov)" }) -ForegroundColor White
     Write-Host ""
     Write-Host "  -- Phase Breakdown --------------------------------" -ForegroundColor DarkGray
     Write-Host "  Phase".PadRight(40) + "Result".PadRight(16) + "Duration" -ForegroundColor DarkGray
@@ -238,14 +238,14 @@ if ($event) {
 
     # Device preparation (network, AAD join)
     Write-Phase -Name "Device preparation" `
-                -Status ($event.devicePreparationStatus ?? "unknown") `
+                -Status (if ($event.devicePreparationStatus) { $event.devicePreparationStatus } else { "unknown" }) `
                 -Duration (Format-Duration $event.devicePreparationDuration)
 
     # Device setup (ESP device phase)
-    $deviceSetupStatus = $event.deviceSetupStatus ?? "unknown"
+    $deviceSetupStatus = if ($event.deviceSetupStatus) { $event.deviceSetupStatus } else { "unknown" }
     $deviceSetupDetail = ""
     if ($deviceSetupStatus -eq "failure") {
-        $deviceSetupDetail = $event.enrollmentFailureDetails ?? "No failure detail captured in Graph"
+        $deviceSetupDetail = if ($event.enrollmentFailureDetails) { $event.enrollmentFailureDetails } else { "No failure detail captured in Graph" }
     }
     Write-Phase -Name "ESP - Device setup phase" `
                 -Status $deviceSetupStatus `
@@ -253,7 +253,7 @@ if ($event) {
                 -Detail $deviceSetupDetail
 
     # Account setup (ESP user phase)
-    $accountSetupStatus = $event.accountSetupStatus ?? "unknown"
+    $accountSetupStatus = if ($event.accountSetupStatus) { $event.accountSetupStatus } else { "unknown" }
     $accountSetupDetail = ""
     if ($accountSetupStatus -eq "failure") {
         $accountSetupDetail = "User phase failed -- check user-targeted apps and policies"
@@ -264,8 +264,8 @@ if ($event) {
 
     # App and policy counts
     Write-Host ""
-    Write-Host "  Targeted apps    : $($event.targetedAppCount    ?? 'n/a')" -ForegroundColor DarkGray
-    Write-Host "  Targeted policies: $($event.targetedPolicyCount ?? 'n/a')" -ForegroundColor DarkGray
+    Write-Host "  Targeted apps    : $(if ($event.targetedAppCount -ne $null) { $event.targetedAppCount } else { 'n/a' })" -ForegroundColor DarkGray
+    Write-Host "  Targeted policies: $(if ($event.targetedPolicyCount -ne $null) { $event.targetedPolicyCount } else { 'n/a' })" -ForegroundColor DarkGray
 
     # Failure detail block
     if ($event.deploymentState -eq "failure" -or $event.enrollmentFailureDetails) {
@@ -306,7 +306,7 @@ if ($espApps.Count -gt 0) {
             "notInstalled"{ "Yellow" }
             default       { "Gray" }
         }
-        $name      = ($app.displayName ?? $app.settingName ?? "Unknown App")
+        $name      = (if ($app.displayName) { $app.displayName } elseif ($app.settingName) { $app.settingName } else { "Unknown App" })
         $truncName = if ($name.Length -gt 46) { $name.Substring(0,43) + "..." } else { $name }
         $errorCode = if ($app.errorCode -and $app.errorCode -ne 0) { "0x{0:X8}" -f $app.errorCode } else { "" }
 
@@ -335,7 +335,7 @@ if ($espPolicies.Count -gt 0) {
             "nonCompliant" { "Yellow" }
             default        { "Gray" }
         }
-        $name      = ($pol.displayName ?? "Unknown Policy")
+        $name      = (if ($pol.displayName) { $pol.displayName } else { "Unknown Policy" })
         $truncName = if ($name.Length -gt 46) { $name.Substring(0,43) + "..." } else { $name }
         $errorCode = if ($pol.errorCode -and $pol.errorCode -ne 0) { "0x{0:X8}" -f $pol.errorCode } else { "" }
 
@@ -381,8 +381,8 @@ if ($ExportHTML -and $event) {
   <div class="stat"><div class="stat-n">$SerialNumber</div><div class="stat-l">Serial Number</div></div>
   <div class="stat"><div class="stat-n"><span class="badge $deployColor">$($event.deploymentState)</span></div><div class="stat-l">Deployment</div></div>
   <div class="stat"><div class="stat-n">$(Format-Duration $event.deploymentTotalDuration)</div><div class="stat-l">Total Duration</div></div>
-  <div class="stat"><div class="stat-n">$($event.targetedAppCount ?? 0)</div><div class="stat-l">Apps Targeted</div></div>
-  <div class="stat"><div class="stat-n">$($event.targetedPolicyCount ?? 0)</div><div class="stat-l">Policies</div></div>
+  <div class="stat"><div class="stat-n">$(if ($event.targetedAppCount -ne $null) { $event.targetedAppCount } else { 0 })</div><div class="stat-l">Apps Targeted</div></div>
+  <div class="stat"><div class="stat-n">$(if ($event.targetedPolicyCount -ne $null) { $event.targetedPolicyCount } else { 0 })</div><div class="stat-l">Policies</div></div>
 </div>
 
 <div class="section-title">Deployment Timeline</div>
@@ -390,9 +390,9 @@ if ($ExportHTML -and $event) {
 <thead><tr><th>Phase</th><th>Status</th><th>Duration</th></tr></thead>
 <tbody>
   <tr><td>Overall deployment</td><td><span class="badge $deployColor">$($event.deploymentState)</span></td><td>$(Format-Duration $event.deploymentTotalDuration)</td></tr>
-  <tr><td>Device preparation (AAD Join)</td><td>$($event.devicePreparationStatus ?? 'n/a')</td><td>$(Format-Duration $event.devicePreparationDuration)</td></tr>
-  <tr><td>ESP Device setup phase</td><td>$($event.deviceSetupStatus ?? 'n/a')</td><td>$(Format-Duration $event.deviceSetupDuration)</td></tr>
-  <tr><td>ESP Account setup phase</td><td>$($event.accountSetupStatus ?? 'n/a')</td><td>$(Format-Duration $event.accountSetupDuration)</td></tr>
+  <tr><td>Device preparation (AAD Join)</td><td>$(if ($event.devicePreparationStatus) { $event.devicePreparationStatus } else { 'n/a' })</td><td>$(Format-Duration $event.devicePreparationDuration)</td></tr>
+  <tr><td>ESP Device setup phase</td><td>$(if ($event.deviceSetupStatus) { $event.deviceSetupStatus } else { 'n/a' })</td><td>$(Format-Duration $event.deviceSetupDuration)</td></tr>
+  <tr><td>ESP Account setup phase</td><td>$(if ($event.accountSetupStatus) { $event.accountSetupStatus } else { 'n/a' })</td><td>$(Format-Duration $event.accountSetupDuration)</td></tr>
 </tbody>
 </table>
 "@
@@ -411,7 +411,7 @@ $($event.enrollmentFailureDetails)
         foreach ($app in ($espApps | Sort-Object state)) {
             $badge = if ($app.state -eq "installed") { "badge-green" } elseif ($app.state -eq "failed") { "badge-red" } else { "badge-blue" }
             $err   = if ($app.errorCode -and $app.errorCode -ne 0) { "0x{0:X8}" -f $app.errorCode } else { "" }
-            $html += "<tr><td>$($app.displayName ?? $app.settingName)</td><td><span class='badge $badge'>$($app.state)</span></td><td class='mono'>$err</td></tr>"
+            $html += "<tr><td>$(if ($app.displayName) { $app.displayName } else { $app.settingName })</td><td><span class='badge $badge'>$($app.state)</span></td><td class='mono'>$err</td></tr>"
         }
         $html += "</tbody></table>"
     }
